@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { useCallContext } from '@/contexts/CallContext';
 import { cn } from '@/lib/utils';
+import { getAvatarUrl } from '@/lib/avatar';
 
 function VideoBox({
   stream,
@@ -108,8 +109,6 @@ export function CallOverlay() {
 
   if (callState === 'idle') return null;
 
-  const initial = remoteUser?.username.charAt(0).toUpperCase() ?? '?';
-
   return (
     <AnimatePresence>
       <motion.div
@@ -138,18 +137,22 @@ export function CallOverlay() {
                           hasRemoteVideo ? 'opacity-0 pointer-events-none' : 'opacity-100',
                         )}
                       >
-                        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-4xl font-bold text-white">
-                          {initial}
-                        </div>
+                        <img
+                          src={getAvatarUrl(remoteUser?.username || '')}
+                          alt={remoteUser?.username}
+                          className="w-24 h-24 rounded-full border-2 border-white/20 object-cover shadow-2xl"
+                        />
                         <p className="text-lg font-medium text-white/60">{remoteUser?.username}</p>
                         <p className="text-sm text-white/30">Camera off</p>
                       </div>
                     </>
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 gap-4">
-                      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-4xl font-bold text-white">
-                        {initial}
-                      </div>
+                      <img
+                        src={getAvatarUrl(remoteUser?.username || '')}
+                        alt={remoteUser?.username}
+                        className="w-24 h-24 rounded-full border-2 border-white/20 object-cover shadow-2xl"
+                      />
                       <p className="text-lg font-medium text-white/60">{remoteUser?.username}</p>
                       <div className="flex items-center gap-2 text-white/30 text-sm">
                         <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
@@ -229,9 +232,11 @@ export function CallOverlay() {
                       transition={{ repeat: Infinity, duration: 2.5 }}
                       className="absolute inset-0 rounded-full bg-primary/40 blur-lg"
                     />
-                    <div className="relative w-36 h-36 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-5xl font-bold text-white shadow-2xl">
-                      {initial}
-                    </div>
+                    <img
+                      src={getAvatarUrl(remoteUser?.username || '')}
+                      alt={remoteUser?.username}
+                      className="relative w-36 h-36 rounded-full border-4 border-white/20 object-cover shadow-2xl z-10"
+                    />
                     <div className="absolute -bottom-4 left-1/2 -translate-x-1/2">
                       <AudioBars active={!isMicMuted && !!remoteStream} />
                     </div>
@@ -279,9 +284,11 @@ export function CallOverlay() {
                 transition={{ repeat: Infinity, duration: 2 }}
                 className="absolute inset-0 rounded-full bg-primary/30 blur-xl"
               />
-              <div className="relative w-32 h-32 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-4xl font-bold text-white shadow-2xl">
-                {initial}
-              </div>
+              <img
+                src={getAvatarUrl(remoteUser?.username || '')}
+                alt={remoteUser?.username}
+                className="relative w-32 h-32 rounded-full border-4 border-white/20 object-cover shadow-2xl z-10"
+              />
             </div>
             <div className="space-y-2">
               <h2 className="text-3xl font-bold text-white">Calling…</h2>
@@ -301,13 +308,13 @@ export function CallOverlay() {
         {callState === 'receiving' && (
           <div className="flex flex-col items-center justify-center text-center gap-10 px-6">
             <div className="space-y-4">
-              <motion.div
+              <motion.img
                 animate={{ y: [-8, 8, -8] }}
                 transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-                className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-primary to-accent shadow-2xl shadow-primary/40 flex items-center justify-center text-4xl font-bold text-white"
-              >
-                {initial}
-              </motion.div>
+                src={getAvatarUrl(remoteUser?.username || '')}
+                alt={remoteUser?.username}
+                className="w-32 h-32 mx-auto rounded-full border-4 border-white/20 shadow-2xl shadow-primary/40 object-cover"
+              />
               <h2 className="text-4xl font-bold text-white">{remoteUser?.username}</h2>
               <div className="flex flex-col items-center gap-2">
                 <p className="text-sm text-white/50 uppercase tracking-widest">Incoming Call</p>

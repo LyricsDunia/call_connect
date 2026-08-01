@@ -3,6 +3,7 @@ import { useLocation, useSearch } from 'wouter';
 import { Mic, Users, Signal, Search, Video, Link2, Check, LogOut } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useCallContext } from '@/contexts/CallContext';
+import { getAvatarUrl } from '@/lib/avatar';
 
 interface OnlineUser {
   username: string;
@@ -11,10 +12,11 @@ interface OnlineUser {
 }
 
 function useOnlineUsers() {
+  const serverUrl = import.meta.env.VITE_SERVER_URL || '';
   return useQuery<{ users: OnlineUser[] }>({
-    queryKey: ['/api/users/online'],
+    queryKey: [serverUrl + '/api/users/online'],
     queryFn: async ({ signal }) => {
-      const res = await fetch('/api/users/online', { signal });
+      const res = await fetch(`${serverUrl}/api/users/online`, { signal });
       if (!res.ok) throw new Error('Failed to fetch online users');
       return res.json();
     },
@@ -96,6 +98,11 @@ export default function LobbyPage() {
               </h1>
               <p className="text-muted-foreground flex items-center mt-1">
                 <span className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse" />
+                <img
+                  src={getAvatarUrl(currentUser || '')}
+                  alt={currentUser || ''}
+                  className="w-5 h-5 rounded-full border border-white/20 mr-1.5 object-cover"
+                />
                 Connected as{' '}
                 <span className="text-white ml-1 font-medium">{currentUser}</span>
               </p>
@@ -210,9 +217,11 @@ export default function LobbyPage() {
                 >
                   <div className="flex items-center space-x-4 overflow-hidden">
                     <div className="relative shrink-0">
-                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 border-2 border-border flex items-center justify-center text-xl font-display text-white/80 group-hover:border-primary/50 transition-colors">
-                        {user.username.charAt(0).toUpperCase()}
-                      </div>
+                      <img
+                        src={getAvatarUrl(user.username)}
+                        alt={user.username}
+                        className="w-14 h-14 rounded-full border-2 border-border group-hover:border-primary/50 transition-colors object-cover"
+                      />
                       <div className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-green-500 border-2 border-card" />
                     </div>
                     <div className="truncate pr-2">
