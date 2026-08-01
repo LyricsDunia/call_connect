@@ -133,6 +133,7 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
   // ── Ringtone ───────────────────────────────────────────────────────────
   const audioCtxRef = useRef<AudioContext | null>(null);
   const ringtoneRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopRingtone = useCallback(() => {
     if (ringtoneRef.current) {
@@ -189,7 +190,15 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
     setIsCameraOff(false);
   }, []);
 
+  const clearConnectionTimeout = useCallback(() => {
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+  }, []);
+
   const reset = useCallback(() => {
+    clearConnectionTimeout();
     stopRingtone();
     closePeerConnection();
     stopLocalTracks();
@@ -199,12 +208,25 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
     syncCallState('idle');
     syncCallType('video');
   }, [
+    clearConnectionTimeout,
     stopRingtone,
     closePeerConnection,
     stopLocalTracks,
     syncCallState,
     syncCallType,
   ]);
+
+  const startConnectionTimeout = useCallback(() => {
+    clearConnectionTimeout();
+    connectionTimeoutRef.current = setTimeout(() => {
+      const pc = r.current.pc;
+      if (pc && pc.connectionState !== 'connected') {
+        console.warn('[WebRTC] Connection timeout reached (15s). Resetting call.');
+        alert('Could not establish call connection. Please try again.');
+        reset();
+      }
+    }, 15000);
+  }, [clearConnectionTimeout, reset]);
 
   // ── ICE candidate queue helper ─────────────────────────────────────────
   const flushQueue = useCallback(async (pc: RTCPeerConnection) => {
@@ -248,6 +270,14 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
 
     pc.onconnectionstatechange = () => {
       console.log('[Peer]', pc.connectionState);
+      if (pc.connectionState === 'connected') {
+        clearConnectionTimeout();
+      }
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        console.warn('[Peer] Connection failed or closed. Resetting call state.');
+        clearConnectionTimeout();
+        reset();
+      }
     };
 
     // Always create a new MediaStream on every ontrack so React's Object.is
@@ -264,7 +294,7 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return pc;
-  }, [closePeerConnection]);
+  }, [closePeerConnection, clearConnectionTimeout, reset]);
 
   // ── Media acquisition ──────────────────────────────────────────────────
   const getMedia = useCallback(
@@ -397,6 +427,7 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
         await flushQueue(pc);
         stopRingtone();
         syncCallState('active');
+        startConnectionTimeout();
       } catch (e) {
         console.error('[WS] call-answered error', e);
         reset();
@@ -520,7 +551,8 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
       answer: pc.localDescription,
     });
     syncCallState('active');
-  }, [stopRingtone, getMedia, createPC, flushQueue, reset, syncCallState]);
+    startConnectionTimeout();
+  }, [stopRingtone, getMedia, createPC, flushQueue, reset, syncCallState, startConnectionTimeout]);
 
   const rejectCall = useCallback(() => {
     if (r.current.remoteSocketId)
