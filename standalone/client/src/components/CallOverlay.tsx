@@ -127,7 +127,7 @@ export function CallOverlay() {
                       <VideoBox
                         stream={remoteStream}
                         className={cn(
-                          'w-full h-full object-cover transition-opacity duration-500',
+                          'w-full h-full object-contain transition-opacity duration-500',
                           hasRemoteVideo ? 'opacity-100' : 'opacity-0 pointer-events-none',
                         )}
                       />
