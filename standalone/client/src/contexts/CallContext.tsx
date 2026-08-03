@@ -132,6 +132,7 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
     pendingOffer: null as RTCSessionDescriptionInit | null,
     remoteDescSet: false,
     iceCandidateQueue: [] as RTCIceCandidateInit[],
+    iceConfig: null as RTCConfiguration | null,
   });
 
   const syncCallState = useCallback((s: CallState) => {
@@ -255,12 +256,11 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // ── Peer connection factory ────────────────────────────────────────────
   const createPC = useCallback((): RTCPeerConnection => {
-    // Preserve ICE candidates that arrived while callee was on "Accept?" screen
     const savedQueue = [...r.current.iceCandidateQueue];
     closePeerConnection();
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const config = r.current.iceConfig || ICE_SERVERS;
+    const pc = new RTCPeerConnection(config);
     r.current.pc = pc;
     r.current.remoteDescSet = false;
     r.current.iceCandidateQueue = savedQueue;
@@ -387,9 +387,25 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
     socket.disconnect();
   }, [reset]);
 
-  // Restore session on mount
+  // Restore session and fetch dynamic ICE configuration on mount
   useEffect(() => {
     if (currentUser) connectSocket(currentUser);
+
+    const fetchIceConfig = async () => {
+      try {
+        const serverUrl = import.meta.env.VITE_SERVER_URL || window.location.origin;
+        console.log('[WebRTC] Fetching ICE/TURN configuration from backend:', `${serverUrl}/api/ice-servers`);
+        const response = await fetch(`${serverUrl}/api/ice-servers`);
+        if (response.ok) {
+          const config = await response.json();
+          r.current.iceConfig = config;
+          console.log('[WebRTC] Successfully loaded dynamic ICE servers.');
+        }
+      } catch (e) {
+        console.error('[WebRTC] Failed to load ICE servers from backend', e);
+      }
+    };
+    fetchIceConfig();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Socket event listeners — registered ONCE ──────────────────────────
