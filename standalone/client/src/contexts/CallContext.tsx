@@ -39,27 +39,41 @@ interface CallContextType {
 const CallContext = createContext<CallContextType | null>(null);
 
 // ── ICE / Connection config ────────────────────────────────────────────────
-const ICE_SERVERS: RTCConfiguration = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
-    {
-      urls: [
-        'turn:openrelay.metered.ca:80',
-        'turn:openrelay.metered.ca:443',
-        'turns:openrelay.metered.ca:443',
-      ],
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-  ],
-  iceCandidatePoolSize: 10,
-  bundlePolicy: 'max-bundle',
-  rtcpMuxPolicy: 'require',
+const getIceServers = (): RTCConfiguration => {
+  const customIce = import.meta.env.VITE_ICE_SERVERS;
+  if (customIce) {
+    try {
+      console.log('[WebRTC] Using custom ICE servers configuration.');
+      return JSON.parse(customIce);
+    } catch (e) {
+      console.warn('[WebRTC] Failed to parse VITE_ICE_SERVERS environment variable', e);
+    }
+  }
+
+  return {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      {
+        urls: [
+          'turn:openrelay.metered.ca:80',
+          'turn:openrelay.metered.ca:443',
+          'turns:openrelay.metered.ca:443',
+        ],
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
+    ],
+    iceCandidatePoolSize: 10,
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require',
+  };
 };
+
+const ICE_SERVERS = getIceServers();
 
 // ── High-quality media constraints ─────────────────────────────────────────
 const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
@@ -426,8 +440,8 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
         r.current.remoteDescSet = true;
         await flushQueue(pc);
         stopRingtone();
+        closePeerConnection();
         syncCallState('active');
-        startConnectionTimeout();
       } catch (e) {
         console.error('[WS] call-answered error', e);
         reset();
@@ -550,9 +564,9 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
       to: r.current.remoteSocketId,
       answer: pc.localDescription,
     });
+    closePeerConnection();
     syncCallState('active');
-    startConnectionTimeout();
-  }, [stopRingtone, getMedia, createPC, flushQueue, reset, syncCallState, startConnectionTimeout]);
+  }, [stopRingtone, getMedia, createPC, flushQueue, closePeerConnection, reset, syncCallState]);
 
   const rejectCall = useCallback(() => {
     if (r.current.remoteSocketId)
