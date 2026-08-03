@@ -61,7 +61,7 @@ const getIceServers = (): RTCConfiguration => {
         urls: [
           'turn:openrelay.metered.ca:80',
           'turn:openrelay.metered.ca:443',
-          'turns:openrelay.metered.ca:443',
+          'turns:openrelay.metered.ca:443?transport=tcp',
         ],
         username: 'openrelayproject',
         credential: 'openrelayproject',
@@ -428,9 +428,24 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
       startRingtone('incoming');
     };
 
-    const onCallAnswered = async () => {
-      stopRingtone();
-      syncCallState('active');
+    const onCallAnswered = async ({
+      answer,
+    }: {
+      answer: RTCSessionDescriptionInit;
+    }) => {
+      const pc = r.current.pc;
+      if (!pc) return;
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        r.current.remoteDescSet = true;
+        await flushQueue(pc);
+        stopRingtone();
+        syncCallState('active');
+        startConnectionTimeout();
+      } catch (e) {
+        console.error('[WS] call-answered error', e);
+        reset();
+      }
     };
 
     const onIceCandidate = async ({
@@ -488,30 +503,70 @@ export const CallProvider = ({ children }: { children: ReactNode }) => {
       syncCallState('calling');
       startRingtone('outgoing');
 
-      console.log('[initiateCall] sending call request to server for socketId:', user.socketId);
+      const stream = await getMedia(type);
+      if (!stream) {
+        console.error('[initiateCall] failed to get local stream');
+        reset();
+        return;
+      }
+
+      console.log('[initiateCall] local stream acquired, setting up peer connection...');
+      const pc = createPC();
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      console.log('[initiateCall] creating offer...');
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      
+      console.log('[initiateCall] sending offer to server for socketId:', user.socketId);
       socket.emit('call-user', {
         to: user.socketId,
-        offer: { type: 'offer', sdp: '' },
+        offer: pc.localDescription,
         callType: type,
       });
     },
-    [startRingtone, syncCallState, syncCallType],
+    [startRingtone, getMedia, createPC, reset, syncCallState, syncCallType],
   );
 
   const acceptCall = useCallback(async () => {
     console.log('[acceptCall] accepting call, remoteSocketId:', r.current.remoteSocketId);
     stopRingtone();
-    if (!r.current.remoteSocketId) {
-      console.error('[acceptCall] no remote socket ID found!');
+    const offer = r.current.pendingOffer;
+    const type = r.current.callType;
+    if (!offer) {
+      console.error('[acceptCall] no pending offer found!');
       return;
     }
 
+    const stream = await getMedia(type);
+    if (!stream) {
+      console.error('[acceptCall] failed to get local stream');
+      if (r.current.remoteSocketId)
+        socket.emit('reject-call', { to: r.current.remoteSocketId });
+      reset();
+      return;
+    }
+
+    console.log('[acceptCall] local stream acquired, setting up peer connection...');
+    const pc = createPC();
+    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    r.current.remoteDescSet = true;
+    await flushQueue(pc);
+
+    console.log('[acceptCall] creating answer...');
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    console.log('[acceptCall] sending answer to server for socketId:', r.current.remoteSocketId);
     socket.emit('answer-call', {
       to: r.current.remoteSocketId,
-      answer: { type: 'answer', sdp: '' },
+      answer: pc.localDescription,
     });
     syncCallState('active');
-  }, [stopRingtone, syncCallState]);
+    startConnectionTimeout();
+  }, [stopRingtone, getMedia, createPC, flushQueue, reset, syncCallState, startConnectionTimeout]);
 
   const rejectCall = useCallback(() => {
     if (r.current.remoteSocketId)
